@@ -172,30 +172,17 @@ def main():
                 history.append(message)
 
                 # ── Execute Linkup search ────────────────────────────
-                for tool_call in message.tool_calls:
-                    if tool_call.function.name == "search_internet":
-                        args = json.loads(tool_call.function.arguments)
-                        q = args.get("query")
-                        print(f"Searching: {q}...")
-
-                        try:
-                            result = linkup.search(
-                                query=q,
-                                depth="standard",
-                                output_type="searchResults"
-                            )
-                            content = "\n\n".join([
-                                f"Title: {r.name}\nURL: {r.url}\nContent: {r.content}"
-                                for r in result.results
-                            ])
-                        except Exception as e:
-                            content = f"Search error: {e}"
-
-                        history.append({
-                            "role": "tool",
-                            "tool_call_id": tool_call.id,
-                            "content": content
-                        })
+                for tc in message.tool_calls:
+                    q = json.loads(tc.function.arguments)["query"]
+                    print(f"Searching: {q}...")
+                    try:
+                        result = linkup.search(query=q, depth="standard", output_type="searchResults")
+                        content = "\n\n".join(
+                            f"{r.name}\n{r.url}\n{r.content}" for r in result.results
+                        )
+                    except Exception as e:
+                        content = f"Search error: {e}"
+                    history.append({"role": "tool", "tool_call_id": tc.id, "content": content})
 
                 # ── Pass 2: Synthesize search results into an answer ─
                 final = client.chat.completions.create(
