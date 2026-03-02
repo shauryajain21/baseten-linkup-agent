@@ -122,7 +122,8 @@ def main():
 
     # ── System prompt & conversation history ─────────────────────────
     # Instructs the model to prefer searching over stale training data.
-    # History is capped at 10 turns to stay within context limits.
+    # We cap history at 10 turns here for context limits, but feel free
+    # to adjust MAX_HISTORY_TURNS based on your use case.
     today_str = datetime.now().strftime("%B %d, %Y")
     system_prompt = (
         f"You are a helpful assistant. Today is {today_str}. "
