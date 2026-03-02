@@ -137,6 +137,8 @@ def main():
     history = [{"role": "system", "content": system_prompt}]
     MAX_HISTORY_TURNS = 10
 
+    # ── Chat loop ────────────────────────────────────────────────────
+    # Takes user input, decides whether to search the web, and responds.
     while True:
         try:
             user_input = input("You: ")
@@ -149,10 +151,6 @@ def main():
             if len(history) > (MAX_HISTORY_TURNS * 2) + 1:
                 history = [history[0]] + history[-(MAX_HISTORY_TURNS * 2):]
 
-            # ── Keyword hints (anti-tool-fatigue) ────────────────────
-            # In long conversations, models can stop calling tools even
-            # when they should. If the query contains obvious search
-            # keywords, we force tool_choice="required" to guarantee it.
             search_hints = [
                 "latest", "current", "recent", "today", "now",
                 "news", "stock price", "weather", "search", "look up",
