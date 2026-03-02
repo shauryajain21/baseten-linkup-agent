@@ -62,9 +62,7 @@ BASETEN_API_KEY=paste_your_baseten_key_here
 LINKUP_API_KEY=paste_your_linkup_key_here
 ```
 
-## Step 3: Architecting the Agentic Loop
-
-The agent uses a two-pass inference pattern: the first call decides whether to invoke a search tool, and if so, the second call synthesizes the search results into a final answer. To prevent tool fatigue in long conversations, keyword hints force `tool_choice="required"` when the query clearly needs live data.
+## Step 3: Build the Agent
 
 Create a file named `agent.py` and add the following code:
 
@@ -76,6 +74,9 @@ from openai import OpenAI
 from linkup import LinkupClient
 from dotenv import load_dotenv
 
+# ── Initialize clients ──────────────────────────────────────────────
+# Baseten exposes an OpenAI-compatible endpoint, so we use the standard openai SDK.
+# Linkup provides the web search capability.
 load_dotenv()
 BASETEN_API_KEY = os.environ.get("BASETEN_API_KEY")
 LINKUP_API_KEY = os.environ.get("LINKUP_API_KEY")
@@ -92,6 +93,9 @@ client = OpenAI(
 )
 linkup = LinkupClient(api_key=LINKUP_API_KEY)
 
+# ── Tool schema ─────────────────────────────────────────────────────
+# Tells the model a search_internet function exists. The model reads
+# this schema and decides when to call it based on the user's query.
 tools = [
     {
         "type": "function",
@@ -116,6 +120,9 @@ def main():
     print(f"--- Serverless Agent ({MODEL_SLUG}) ---")
     print("Type 'quit' to exit.\n")
 
+    # ── System prompt & conversation history ─────────────────────────
+    # Instructs the model to prefer searching over stale training data.
+    # History is capped at 10 turns to stay within context limits.
     today_str = datetime.now().strftime("%B %d, %Y")
     system_prompt = (
         f"You are a helpful assistant. Today is {today_str}. "
@@ -138,11 +145,13 @@ def main():
 
             history.append({"role": "user", "content": user_input})
 
-            # Trim history to stay within context limits
             if len(history) > (MAX_HISTORY_TURNS * 2) + 1:
                 history = [history[0]] + history[-(MAX_HISTORY_TURNS * 2):]
 
-            # Force tool use when the query clearly needs live data
+            # ── Keyword hints (anti-tool-fatigue) ────────────────────
+            # In long conversations, models can stop calling tools even
+            # when they should. If the query contains obvious search
+            # keywords, we force tool_choice="required" to guarantee it.
             search_hints = [
                 "latest", "current", "recent", "today", "now",
                 "news", "stock price", "weather", "search", "look up",
@@ -151,7 +160,7 @@ def main():
             ]
             needs_search = any(h in user_input.lower() for h in search_hints)
 
-            # Pass 1: Decide whether to call a tool
+            # ── Pass 1: Ask the model if it needs to search ──────────
             response = client.chat.completions.create(
                 model=MODEL_SLUG,
                 messages=history,
@@ -163,6 +172,7 @@ def main():
             if message.tool_calls:
                 history.append(message)
 
+                # ── Execute Linkup search ────────────────────────────
                 for tool_call in message.tool_calls:
                     if tool_call.function.name == "search_internet":
                         args = json.loads(tool_call.function.arguments)
@@ -188,7 +198,7 @@ def main():
                             "content": content
                         })
 
-                # Pass 2: Synthesize search results into final answer
+                # ── Pass 2: Synthesize search results into an answer ─
                 final = client.chat.completions.create(
                     model=MODEL_SLUG,
                     messages=history
